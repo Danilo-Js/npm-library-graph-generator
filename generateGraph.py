@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from collections import defaultdict
 
+
 def plot_downloads_x_data(dates, downloads):
     plt.figure(figsize=(10, 5))
     plt.plot(dates, downloads, '-o', color='blue')
@@ -36,56 +37,49 @@ def plot_cumulative_downloads_x_version(version_downloads):
     plt.tight_layout()
     plt.show()
 
+# Informações do pacote e intervalo de datas
 package_name = "react-native-search-select"
 start_date = "2022-12-03"
 end_date = datetime.now().strftime('%Y-%m-%d')
 
-# Buscar detalhes do pacote
+# Versões de interesse
+interested_versions = ['1.2.2', '3.0.8', '3.0.9', '4.0.0']
+
+# Obtendo os dados do pacote
 package_url = f"https://registry.npmjs.org/{package_name}"
 package_response = requests.get(package_url)
 all_time_data = package_response.json()['time']
 
-version_date_map = {d.split('T')[0]: v for v, d in all_time_data.items() if v.replace('.', '').isnumeric()}
+# Mapeando datas de lançamento para versões
+version_date_map = {d.split('T')[0]: v for v, d in all_time_data.items() if v in interested_versions}
 
-# Buscar downloads por data
+# Obtendo dados de downloads
 downloads_url = f"https://api.npmjs.org/downloads/range/{start_date}:{end_date}/{package_name}"
 downloads_response = requests.get(downloads_url)
 downloads_data = downloads_response.json()['downloads']
 
+# Preparando dados para plotagem
 dates = []
 downloads = []
-versions_on_release = []
+version_downloads = defaultdict(int)
 
-# Estruturando os dados
+# Acumulando downloads por versão de interesse
 for entry in downloads_data:
     date = entry['day']
     download = entry['downloads']
     version = version_date_map.get(date)
-
-    dates.append(datetime.strptime(date, '%Y-%m-%d'))
-    downloads.append(download)
-    versions_on_release.append(version if version else 'N/A')
-
-# Filtrando dados para entradas onde a versão não é "N/A"
-filtered_downloads = [d for v, d in zip(versions_on_release, downloads) if v != 'N/A']
-filtered_versions = [v for v in versions_on_release if v != 'N/A']
-
-# Estruturando os dados e acumulando downloads por versão
-version_downloads = defaultdict(int)
-for entry in downloads_data:
-    date = entry['day']
-    download = entry['downloads']
     
-    # A versão associada à data ou a versão anterior se a data atual não tiver uma nova versão lançada
-    version = version_date_map.get(date, None)
-    if not version:
-        valid_dates = [d for d in version_date_map.keys() if d <= date]
-        if valid_dates:
-            version = version_date_map[max(valid_dates)]
-            
-    if version:
+    # Adicionar a versão se ela estiver na lista de interesse e houver downloads
+    if version and download > 0:
+        dates.append(datetime.strptime(date, '%Y-%m-%d'))
+        downloads.append(download)
         version_downloads[version] += download
 
-# plot_downloads_x_data(dates, downloads)
-plot_downloads_x_version_on_release(filtered_versions, filtered_downloads)
-# plot_cumulative_downloads_x_version(version_downloads)
+# Filtrando para incluir apenas as datas onde versões de interesse foram lançadas
+filtered_dates = [dates[i] for i, v in enumerate(dates) if version_date_map.get(v.strftime('%Y-%m-%d'))]
+filtered_downloads = [downloads[i] for i, v in enumerate(dates) if version_date_map.get(v.strftime('%Y-%m-%d'))]
+
+# Plotando os gráficos
+plot_downloads_x_data(filtered_dates, filtered_downloads)
+plot_downloads_x_version_on_release(interested_versions, [version_downloads[v] for v in interested_versions])
+plot_cumulative_downloads_x_version(version_downloads)
